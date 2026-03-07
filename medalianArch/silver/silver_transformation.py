@@ -1,11 +1,15 @@
 from pyspark.sql.functions import (
     col, trim, lower, upper, substring, initcap, 
-    to_date, try_to_date, current_timestamp, when, regexp_replace, length
+    to_date, current_timestamp, when, regexp_replace, length
 )
 
-# Optional: If running outside a notebook, you might need to import SparkSession
-# from pyspark.sql import SparkSession
-# spark = SparkSession.builder.getOrCreate()
+# Use Databricks-native functions for try_to_date in DBR 16.4 LTS
+try:
+    from pyspark.databricks.sql import functions as dbf
+    try_to_date = dbf.try_to_date
+except ImportError:
+    # Fallback for environments where the native module isn't available
+    from pyspark.sql.functions import to_date as try_to_date
 
 def init_silver_layer(spark):
     """Ensures the Silver database exists before processing."""
@@ -51,7 +55,6 @@ def process_crm_prd_info(spark):
         .withColumn("prd_id",substring(col("prd_key"),7,length(col("prd_key"))))
     )
     
-    # Add the overwriteSchema option before saving
     df_silver.write.format('delta').mode('overwrite').option("overwriteSchema", "true").saveAsTable(target)
     print(f"Successfully cleaned prd_info and wrote to {target}")
 
@@ -72,7 +75,6 @@ def process_sales_details(spark):
         .withColumn("_cleaned_timestamp", current_timestamp())
     )
     
-# Add the overwriteSchema option here as well
     df_silver.write.format('delta').mode('overwrite').option("overwriteSchema", "true").saveAsTable(target)
     print(f"Successfully cleaned sales_details and wrote to {target}")
 
@@ -133,12 +135,8 @@ def process_erp_px_cat(spark):
     df_silver.write.format('delta').mode('overwrite').option("overwriteSchema", "true").saveAsTable(target)
     print(f"Successfully cleaned px_cat_g1v2 and wrote to {target}")
 
-# ==========================================
-# MAIN EXECUTION BLOCK
-# ==========================================
 if __name__ == "__main__":
     print("Starting Silver Layer Processing...")
-    
     init_silver_layer(spark)
     
     process_crm_cust_info(spark)
