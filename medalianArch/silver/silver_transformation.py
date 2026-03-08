@@ -1,23 +1,22 @@
 from pyspark.sql.functions import (
     col, trim, lower, upper, substring, initcap, 
-    to_date, current_timestamp, when, regexp_replace, length
+    to_date, current_timestamp, when, regexp_replace, length, expr
 )
 
-# Use Databricks-native functions for try_to_date in DBR 16.4 LTS
-try:
-    from pyspark.databricks.sql import functions as dbf
-    try_to_date = dbf.try_to_date
-except ImportError:
-    # Fallback for environments where the native module isn't available
-    from pyspark.sql.functions import to_date as try_to_date
+# Constants for Unity Catalog 3-level names
+CATALOG = "nawaf"
+BRONZE_SCHEMA = "bronze_new"
+SILVER_SCHEMA = "silver"
 
 def init_silver_layer(spark):
-    """Ensures the Silver database exists before processing."""
-    spark.sql("CREATE DATABASE IF NOT EXISTS silver")
+    """Ensures the Silver schema exists in the 'nawaf' catalog."""
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{SILVER_SCHEMA}")
+    print(f"Schema '{CATALOG}.{SILVER_SCHEMA}' is ready.")
 
 def process_crm_cust_info(spark):
-    source = 'workspace.bronze_new.crm_20260221135014660445_cust_info'
-    target = 'workspace.silver.crm_cust_info'
+    # FIXED: Source now matches the actual table in your screenshot
+    source = f'{CATALOG}.{BRONZE_SCHEMA}.crm_cust_info'
+    target = f'{CATALOG}.{SILVER_SCHEMA}.crm_cust_info'
     
     df = spark.read.table(source)
     df_silver = (df
@@ -40,8 +39,9 @@ def process_crm_cust_info(spark):
     print(f"Successfully cleaned cust_info and wrote to {target}")
 
 def process_crm_prd_info(spark):
-    source = 'workspace.bronze_new.crm_20260221135017183310_prd_info'
-    target = 'workspace.silver.prd_info'
+    # FIXED: Source name updated
+    source = f'{CATALOG}.{BRONZE_SCHEMA}.crm_prd_info'
+    target = f'{CATALOG}.{SILVER_SCHEMA}.prd_info'
     
     df = spark.read.table(source)
     df_silver = (df
@@ -59,16 +59,18 @@ def process_crm_prd_info(spark):
     print(f"Successfully cleaned prd_info and wrote to {target}")
 
 def process_sales_details(spark):
-    source = 'workspace.bronze_new.crm_20260221135017680009_sales_details'
-    target = 'workspace.silver.sales_details'
+    # FIXED: Source name updated
+    source = f'{CATALOG}.{BRONZE_SCHEMA}.crm_sales_details'
+    target = f'{CATALOG}.{SILVER_SCHEMA}.sales_details'
     
     df = spark.read.table(source)
     df_silver = (df
         .dropna(subset=['sls_ord_num', 'sls_prd_key', 'sls_cust_id'])
         .dropDuplicates(['sls_ord_num', 'sls_prd_key'])
-        .withColumn('sls_order_dt', try_to_date(col('sls_order_dt').cast('string'), 'yyyyMMdd'))
-        .withColumn('sls_ship_dt', try_to_date(col('sls_ship_dt').cast('string'), 'yyyyMMdd'))
-        .withColumn('sls_due_dt', try_to_date(col('sls_due_dt').cast('string'), 'yyyyMMdd'))
+        # Replace the sls_order_dt, sls_ship_dt, and sls_due_dt lines with:
+        .withColumn('sls_order_dt', to_date(col('sls_order_dt').cast('string'), 'yyyyMMdd'))
+        .withColumn('sls_ship_dt', to_date(col('sls_ship_dt').cast('string'), 'yyyyMMdd'))
+        .withColumn('sls_due_dt', to_date(col('sls_due_dt').cast('string'), 'yyyyMMdd'))
         .withColumn('sls_sales', regexp_replace(col('sls_sales').cast('string'), r'[\$,]', '').cast('decimal(10,2)'))
         .withColumn('sls_price', regexp_replace(col('sls_price').cast('string'), r'[\$,]', '').cast('decimal(10,2)'))
         .withColumn('sls_quantity', col('sls_quantity').cast('int'))
@@ -79,15 +81,16 @@ def process_sales_details(spark):
     print(f"Successfully cleaned sales_details and wrote to {target}")
 
 def process_erp_cust_az12(spark):
-    source = 'workspace.bronze_new.erp_20260221135020384837_cust_az12'
-    target = 'workspace.silver.erp_cust_az12'
+    # FIXED: Source name updated
+    source = f'{CATALOG}.{BRONZE_SCHEMA}.erp_cust_az12'
+    target = f'{CATALOG}.{SILVER_SCHEMA}.erp_cust_az12'
     
     df = spark.read.table(source)
     df_silver = (df
         .dropna(subset=['CID'])
         .dropDuplicates(['CID'])
         .withColumn('GEN', upper(substring(trim(col('GEN')), 1, 1)))
-        .withColumn('BDATE', try_to_date(col('BDATE').cast('string'), 'yyyy-MM-dd'))
+        .withColumn('BDATE', to_date(col('BDATE').cast('string'), 'yyyy-MM-dd')) 
         .withColumn("_cleaned_timestamp", current_timestamp())
         .withColumn("CID", substring(col("CID"), 4, length(col("CID"))))
     )
@@ -96,8 +99,9 @@ def process_erp_cust_az12(spark):
     print(f"Successfully cleaned cust_az12 and wrote to {target}")
 
 def process_erp_loc_a101(spark):
-    source = 'workspace.bronze_new.erp_20260221135021821657_loc_a101'
-    target = 'workspace.silver.loc_a101'
+    # FIXED: Source name updated
+    source = f'{CATALOG}.{BRONZE_SCHEMA}.erp_loc_a101'
+    target = f'{CATALOG}.{SILVER_SCHEMA}.loc_a101'
     
     df = spark.read.table(source)
     df_silver = (df
@@ -113,8 +117,9 @@ def process_erp_loc_a101(spark):
     print(f"Successfully cleaned loc_a101 and wrote to {target}")
 
 def process_erp_px_cat(spark):
-    source = 'workspace.bronze_new.erp_20260221135023079340_px_cat_g1v2'
-    target = 'workspace.silver.erp_px_cat_g1v2'
+    # FIXED: Source name updated
+    source = f'{CATALOG}.{BRONZE_SCHEMA}.erp_px_cat_g1v2'
+    target = f'{CATALOG}.{SILVER_SCHEMA}.erp_px_cat_g1v2'
     
     df = spark.read.table(source)
     df_silver = (df
